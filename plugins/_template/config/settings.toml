@@ -1,0 +1,6 @@
+# Plugin-specific settings
+# Only plugin-specific sections go here.
+# Models, routing, hardware — all in core config/settings.toml.
+
+[product]
+mode = "my-plugin"

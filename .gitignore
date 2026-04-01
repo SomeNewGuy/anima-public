@@ -1,0 +1,67 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environment
+persistence-env/
+venv/
+.venv/
+env/
+
+# Data (user-generated, not shipped)
+data/
+*.db
+
+# ChromaDB
+chroma/
+
+# Models (user downloads these)
+models/
+
+# Plugin data
+plugins/*/data/
+plugins/*/corpus/
+
+# Environment and secrets
+.env
+secret_settings.py
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code
+.claude/
+
+# Logs
+*.log
+logs/
+
+# Analysis output
+analysis/output/
+
+# Hub installed packages (user-managed)
+hub/packages/tools/*/
+hub/packages/plugins/*/
+hub/packages/belief-packs/*/
+hub/packages/corpora/*/
+hub/packages/templates/*/
+hub/hub.lock
+
+# Compiled Rust core (optional, downloaded separately)
+*.so
+*.dylib
+*.dll

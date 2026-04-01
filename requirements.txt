@@ -1,0 +1,51 @@
+# ANIMA Platform Dependencies
+# Install: pip install -r requirements.txt
+
+# ─── Core ───
+fastapi>=0.135.0
+uvicorn>=0.41.0
+uvloop>=0.22.0
+starlette>=0.52.0
+pydantic>=2.12.0
+requests>=2.32.0
+httpx>=0.28.0
+toml>=0.10.2
+PyYAML>=6.0.0
+python-dotenv>=1.2.0
+orjson>=3.11.0
+rich>=14.0.0
+
+# ─── Memory ───
+chromadb>=1.5.0
+sentence-transformers>=5.2.0
+
+# ─── NLP ───
+spacy>=3.8.0
+
+# ─── Inference ───
+llama-cpp-python>=0.3.16
+
+# ─── Search ───
+ddgs>=9.0.0
+
+# ─── Web ───
+Jinja2>=3.1.0
+MarkupSafe>=3.0.0
+
+# ─── Utilities ───
+jsonschema>=4.26.0
+simpleeval>=1.0.0
+pypdf>=6.9.0
+click>=8.3.0
+numpy>=2.4.0
+
+# ─── Optional: Game Plugin ───
+# Uncomment if using the Game plugin (Sectorfall MUD)
+# Django>=6.0.0
+# evennia>=6.0.0
+# Flask>=3.1.0
+# gevent>=25.9.0
+
+# ─── Optional: GPU Acceleration ───
+# Uncomment for CUDA-accelerated embeddings
+# torch>=2.10.0

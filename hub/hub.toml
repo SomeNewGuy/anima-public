@@ -1,0 +1,15 @@
+# ANIMA Hub Configuration
+# Local hub settings for package management
+
+[hub]
+registry = "https://animahub.io/api/v1"    # remote registry (when available)
+packages_dir = "hub/packages"
+
+[trust]
+trusted_authors = ["anima"]
+allow_unsigned = false
+allow_execute = false                       # must opt-in for execute-level tools
+
+[limits]
+max_tool_calls_per_turn = 3                 # max tool invocations per inference turn
+max_data_dir_mb = 100                       # warn if tool data dir exceeds this

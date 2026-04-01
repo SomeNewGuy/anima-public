@@ -1,0 +1,42 @@
+ANIMA Core Binary License Agreement
+
+This license governs use of the ANIMA Core binary components (including
+compiled libraries and executables).
+
+Copyright (c) 2026 Gerald Teeple. All rights reserved.
+
+1. Grant of License
+
+You are granted a limited, non-exclusive, non-transferable license to use
+the ANIMA Core binary for personal or internal business use.
+
+2. Restrictions
+
+You may NOT:
+- Reverse engineer, decompile, or disassemble the binary
+- Modify or create derivative works of the binary
+- Redistribute, sublicense, or sell the binary without explicit permission
+- Use the binary as part of a competing product or service
+
+3. Separation from Open Source Components
+
+The ANIMA Core binary is separate from the AGPL-licensed components of
+ANIMA. This license applies only to the binary components. Use of the
+AGPL-licensed code is governed by the LICENSE file.
+
+4. No Warranty
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+
+5. Termination
+
+This license terminates automatically if you violate its terms.
+
+6. Commercial Licensing
+
+For commercial use, redistribution, or embedding, a separate commercial
+license is required.
+
+Contact: licensing@animahub.io

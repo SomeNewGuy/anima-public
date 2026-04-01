@@ -1,0 +1,105 @@
+# ANIMA Configuration
+# Copy this file to settings.toml and configure for your setup.
+# See docs/CONFIG.md for detailed explanations.
+
+# ─────────────────────────────────────────────────────────────
+# Product Mode
+# ─────────────────────────────────────────────────────────────
+[product]
+mode = "home"                          # home | dms | game
+
+# ─────────────────────────────────────────────────────────────
+# Inference Server
+# ─────────────────────────────────────────────────────────────
+# ANIMA connects to external inference servers (llama-server, Ollama, or APIs).
+# You must have at least one model running. See docs/MODELS.md for setup.
+
+[inference]
+inference_server = "http://localhost:8080"    # your primary inference endpoint
+thinking_prefix = true                        # enable thinking mode for supported models
+
+# ─────────────────────────────────────────────────────────────
+# Routing
+# ─────────────────────────────────────────────────────────────
+[routing]
+mode = "solo"                          # solo (one model) | multi (multiple models)
+
+# ─────────────────────────────────────────────────────────────
+# Models
+# ─────────────────────────────────────────────────────────────
+# Define your available models here. Each model needs a unique key.
+# ANIMA auto-detects capabilities — you just provide endpoints.
+
+[models.default]
+name = "default"
+endpoint = "http://localhost:8080"
+backend = "llama"                      # llama | ollama | anthropic | openai
+context_window = 16384
+enabled = true
+
+# Example: Ollama model
+# [models.ollama_local]
+# name = "llama3.2"
+# endpoint = "http://localhost:11434"
+# backend = "ollama"
+# context_window = 8192
+# enabled = true
+
+# Example: Anthropic Claude
+# [models.claude]
+# name = "claude-sonnet-4-20250514"
+# backend = "anthropic"
+# api_key_env = "ANTHROPIC_API_KEY"
+# context_window = 200000
+# enabled = true
+
+# ─────────────────────────────────────────────────────────────
+# Memory
+# ─────────────────────────────────────────────────────────────
+[memory]
+embedding_model = "all-MiniLM-L6-v2"  # auto-downloaded on first run
+max_beliefs = 10000
+max_episodes = 5000
+
+[memory.sqlite]
+path = "data/sqlite/persistence.db"   # relative to ANIMA_DATA_DIR
+
+[memory.chroma]
+path = "data/chroma"                   # relative to ANIMA_DATA_DIR
+
+# ─────────────────────────────────────────────────────────────
+# Reflection (Dreams)
+# ─────────────────────────────────────────────────────────────
+# Dreams require the anima-core binary (free download).
+# Without it, ANIMA runs in memory-only mode.
+
+[reflection]
+enabled = true
+dreams_enabled = true                  # requires anima-core
+
+[consolidation]
+mode = "cycle-count"                   # cycle-count | time-interval | manual
+interval = 5                           # consolidate every N cycles
+
+# ─────────────────────────────────────────────────────────────
+# Curiosity
+# ─────────────────────────────────────────────────────────────
+[curiosity]
+enabled = true
+auto_detect_gaps = true
+max_open_questions = 50
+
+# ─────────────────────────────────────────────────────────────
+# Exploration
+# ─────────────────────────────────────────────────────────────
+[exploration]
+enabled = true
+auto_trigger = true
+diversity_threshold = 0.6
+
+# ─────────────────────────────────────────────────────────────
+# Web Interface
+# ─────────────────────────────────────────────────────────────
+[web]
+host = "127.0.0.1"                     # localhost only by default
+port = 8900

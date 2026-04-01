@@ -1,0 +1,5 @@
+[plugin]
+name = "my-plugin"
+version = "0.1.0"
+mode = "my-plugin"
+description = "Description of what this plugin does"

@@ -1,0 +1,55 @@
+ANIMA Platform
+Copyright (c) 2026 Gerald Teeple. All rights reserved.
+
+This software is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+See the LICENSE file for the full license text.
+
+────────────────────────────────────────────────────────────────
+
+INTELLECTUAL PROPERTY NOTICE
+
+"ANIMA", "ANIMA Hub", "animahub.io", and the ANIMA logo are trademarks of
+Gerald Teeple. You may not use these marks in derivative works without
+written permission.
+
+The AGPL-3.0 license grants you rights to the source code. It does NOT grant
+rights to trademarks, trade names, or branding.
+
+────────────────────────────────────────────────────────────────
+
+COMPONENTS AND LICENSING
+
+  ANIMA Platform (this repository)
+    License: AGPL-3.0
+    Copyright: Gerald Teeple
+
+  ANIMA Core (compiled Rust engine)
+    License: Proprietary — free binary download, separate terms
+    Copyright: Gerald Teeple
+    Available at: https://animahub.io/core
+
+  ANIMA Hub (marketplace)
+    License: Proprietary
+    Copyright: Gerald Teeple
+    Available at: https://animahub.io
+
+  Commercial Plugins (Research, Coding, IT Ops, etc.)
+    License: Commercial — separate license required
+    Copyright: Gerald Teeple
+    Available at: https://animahub.io
+
+────────────────────────────────────────────────────────────────
+
+THIRD-PARTY NOTICES
+
+This software includes third-party open source components, each with their
+own licenses. See requirements.txt for the full dependency list.
+
+Key dependencies and their licenses:
+  FastAPI          — MIT
+  Pydantic         — MIT
+  ChromaDB         — Apache 2.0
+  sentence-transformers — Apache 2.0
+  spaCy            — MIT
+  llama-cpp-python — MIT
+  Evennia          — BSD (Game plugin only)
