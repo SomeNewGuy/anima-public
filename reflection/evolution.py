@@ -4158,6 +4158,7 @@ class EvolutionEngine:
                 f"{mixed_count} mixed, {hub_count} hub"
             )
 
+            pre_bridge_count = self._count_cross_domain_bridges()
             dream_results = []
             for idx_a, idx_b, sim, _score, _xcluster, _xdomain, _fcat in candidates:
                 belief_a = sampled[idx_a]
