@@ -80,16 +80,16 @@ Visit [animahub.io](https://animahub.io) for the full marketplace (coming soon).
 
 ```
 ┌─────────────────────────────────────────────────┐
-│                  ANIMA Core                      │
-│                                                  │
+│                  ANIMA Core                     │
+│                                                 │
 │  ┌──────────┐  ┌──────────┐  ┌───────────────┐  │
-│  │  Router   │  │ Embeddings│  │  Tool Registry │  │
-│  │ (shared)  │  │ (shared)  │  │   (shared)    │  │
+│  │  Router  │  │Embeddings│  │ Tool Registry │  │
+│  │ (shared) │  │ (shared) │  │   (shared)    │  │
 │  └──────────┘  └──────────┘  └───────────────┘  │
-│                                                  │
+│                                                 │
 │  ┌──────────────────────────────────────────┐   │
-│  │         Plugin Instance (per plugin)      │   │
-│  │  Own DB  │  Own Memory  │  Own Dashboard  │   │
+│  │         Plugin Instance (per plugin)     │   │
+│  │  Own DB  │  Own Memory  │  Own Dashboard │   │
 │  └──────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────┘
 ```
@@ -121,6 +121,12 @@ The `install.sh` script downloads and installs the correct binary for your platf
 - Linux, macOS, or Windows (WSL2 works)
 - At least one inference server (llama.cpp, Ollama, or API key)
 - 8GB+ RAM recommended
+
+## Community
+
+- [Discord](https://discord.gg/wHPHUmkB9D) — questions, discussion, showcase
+- [GitHub Issues](https://github.com/SomeNewGuy/anima-public/issues) — bug reports, feature requests
+- [Documentation](https://animahub.io/docs/) — API reference, plugin development guide
 
 ## Contributing
 
