@@ -261,6 +261,78 @@ class SemanticMemory:
             return 0.0
         return float(np.dot(a, b) / norm)
 
+    # ── Dormant adjacency check ──────────────────────────────────
+
+    DORMANT_REACTIVATION_THRESHOLD = 0.75
+
+    def check_dormant_adjacency(self, belief_id, embedder=None,
+                                trigger_type="new_belief",
+                                threshold=None):
+        """Check if a new/updated belief is adjacent to any dormant beliefs.
+
+        If similarity >= threshold, flag the dormant belief for reactivation
+        review. Does NOT auto-reactivate.
+        """
+        if embedder is None:
+            return []
+
+        threshold = threshold or self.DORMANT_REACTIVATION_THRESHOLD
+
+        trigger = self.db_conn.execute(
+            "SELECT statement FROM beliefs WHERE id = ?", (belief_id,)
+        ).fetchone()
+        if not trigger:
+            return []
+
+        dormant = self.db_conn.execute(
+            "SELECT id, statement FROM beliefs WHERE COALESCE(is_dormant, 0) = 1"
+        ).fetchall()
+        if not dormant:
+            return []
+
+        try:
+            import numpy as np
+            trigger_emb = embedder.embed(trigger["statement"])
+        except Exception:
+            return []
+
+        flagged = []
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc).isoformat()
+
+        for row in dormant:
+            existing = self.db_conn.execute(
+                "SELECT 1 FROM dormant_review "
+                "WHERE dormant_belief_id = ? AND trigger_belief_id = ? "
+                "AND status = 'pending' LIMIT 1",
+                (row["id"], belief_id),
+            ).fetchone()
+            if existing:
+                continue
+
+            try:
+                dormant_emb = embedder.embed(row["statement"])
+                norm = np.linalg.norm(trigger_emb) * np.linalg.norm(dormant_emb)
+                sim = float(np.dot(trigger_emb, dormant_emb) / norm) if norm > 0 else 0.0
+            except Exception:
+                continue
+
+            if sim >= threshold:
+                import uuid as _uuid
+                review_id = str(_uuid.uuid4())
+                self.db_conn.execute(
+                    "INSERT INTO dormant_review "
+                    "(id, dormant_belief_id, trigger_belief_id, trigger_type, "
+                    "similarity, created_at, status) "
+                    "VALUES (?, ?, ?, ?, ?, ?, 'pending')",
+                    (review_id, row["id"], belief_id, trigger_type, sim, now),
+                )
+                flagged.append(row["id"])
+
+        if flagged and not self._suppress_commit:
+            self.db_conn.commit()
+        return flagged
+
     # ── Lifecycle ────────────────────────────────────────────────
 
     def close(self):

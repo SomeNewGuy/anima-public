@@ -688,7 +688,7 @@ class DocumentExtractor:
     def _read_pdf(self, filepath):
         """Extract text from a PDF using the research PDF extractor."""
         try:
-            from ingestion.pdf_extractor import PDFExtractor
+            from .pdf_extractor import PDFExtractor
             pdf = PDFExtractor(
                 inference_engine=self.inference,
                 config=getattr(self, "_config_ref", {}),

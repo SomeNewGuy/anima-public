@@ -34,9 +34,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from time import sleep
 
-from ingestion.scanner import DocumentScanner
-from ingestion.extractor import DocumentExtractor
-from ingestion.entity_extractor import EntityExtractor
+from .scanner import DocumentScanner
+from .extractor import DocumentExtractor
+from .entity_extractor import EntityExtractor
 from memory.dedup import is_normalized_duplicate
 
 logger = logging.getLogger("ingestion.pipeline")
@@ -132,21 +132,6 @@ class DocumentPipeline:
         self.extractor = DocumentExtractor(evolution_engine.inference, self.config)
         self.entity_extractor = EntityExtractor(evolution_engine.inference, self.config)
 
-        # Load plugin prompts if available
-        try:
-            from core.plugin_loader import PluginLoader
-            mode = self.config.get("product", {}).get("mode")
-            if mode:
-                _loader = PluginLoader(os.path.join(
-                    os.path.normpath(os.path.join(os.path.dirname(__file__), "..")),
-                    "plugins",
-                ))
-                _loader.discover()
-                prompts = _loader.get_prompts(mode)
-                if prompts:
-                    self.extractor._plugin_prompts = prompts
-        except Exception:
-            pass
 
     def _resolve_file_path(self, rel_path):
         """Resolve a relative file path against configured datafiles directories.

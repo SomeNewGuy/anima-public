@@ -156,7 +156,7 @@ class AnimaPlugin:
 
         Returns a class (not instance) that will be instantiated by the
         engine with (evolution_engine, embeddings, curiosity, config) args.
-        Returns None to use the base DMSOrchestrator.
+        Returns None if the plugin has no orchestrator.
         """
         return None
 

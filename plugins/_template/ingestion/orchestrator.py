@@ -61,14 +61,14 @@ class DMSOrchestrator:
     @property
     def pipeline(self):
         if self._pipeline is None:
-            from ingestion.pipeline import DocumentPipeline
+            from .pipeline import DocumentPipeline
             self._pipeline = DocumentPipeline(self.engine)
         return self._pipeline
 
     @property
     def matcher(self):
         if self._matcher is None:
-            from ingestion.corpus_matcher import CorpusMatcher
+            from .corpus_matcher import CorpusMatcher
             self._matcher = CorpusMatcher(
                 self.db, self.embeddings, self.config
             )
@@ -77,7 +77,7 @@ class DMSOrchestrator:
     @property
     def extractor(self):
         if self._extractor is None:
-            from ingestion.extractor import DocumentExtractor
+            from .extractor import DocumentExtractor
             self._extractor = DocumentExtractor(
                 self.engine.inference, self.config
             )

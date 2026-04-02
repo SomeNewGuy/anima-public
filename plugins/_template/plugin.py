@@ -88,7 +88,10 @@ class MyPlugin(AnimaPlugin):
         """Return a custom orchestrator class for your plugin's lifecycle.
 
         The orchestrator drives your plugin's work loop (scan, ingest, dream, etc.).
-        Return None to use the base DMSOrchestrator.
+        If your plugin needs document ingestion, copy the ingestion/
+        directory into your own plugin folder and import from there.
+        Never import from another plugin.
+        Return None for no orchestrator.
         """
         return None
 

@@ -183,7 +183,7 @@ class PersistenceCLI:
         # Document retrieval (DMS layer — optional, only when datafiles_dir configured)
         doc_retrieval = None
         if self.config.get("extraction", {}).get("datafiles_dir"):
-            from ingestion.document_retrieval import DocumentRetrieval
+            from plugins._template.ingestion.document_retrieval import DocumentRetrieval
             doc_retrieval = DocumentRetrieval(
                 self.semantic.db_conn, self.config, semantic_memory=self.semantic,
             )
