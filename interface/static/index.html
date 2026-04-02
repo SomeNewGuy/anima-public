@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ANIMA</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0d0d0d;
+  --bg-panel: #141414;
+  --bg-input: #1a1a1a;
+  --border: #2a2a2a;
+  --text: #c8c8c8;
+  --text-dim: #666;
+  --text-bright: #e0e0e0;
+  --accent: #4a9eff;
+}
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: 'Courier New', monospace; font-size: 13px; }
+
+#page { max-width: 1000px; margin: 0 auto; padding: 24px; }
+
+/* Header */
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.header h1 { font-size: 20px; color: var(--text-bright); font-weight: normal; letter-spacing: 2px; }
+.header .version { font-size: 11px; color: var(--text-dim); }
+
+/* Sections */
+.section { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 4px; margin-bottom: 16px; padding: 16px; }
+.section-title { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+
+/* Model grid */
+.model-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.model-card { background: var(--bg-input); border: 1px solid var(--border); border-radius: 4px; padding: 10px 12px; }
+.model-card .name { color: var(--text-bright); font-weight: bold; font-size: 13px; margin-bottom: 4px; }
+.model-card .meta { font-size: 10px; color: var(--text-dim); line-height: 1.6; }
+.model-card .meta a { color: var(--accent); text-decoration: none; }
+.model-card .meta a:hover { text-decoration: underline; }
+.model-card { cursor: pointer; }
+.model-card:hover { border-color: var(--accent); }
+.model-edit { display: none; margin-top: 8px; font-size: 11px; }
+.model-edit.open { display: block; }
+.model-edit label { display: block; margin: 4px 0 2px; color: var(--text-dim); font-size: 10px; }
+.model-edit input, .model-edit select { font-family: inherit; font-size: 11px; padding: 3px 6px; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 3px; width: 100%; }
+.model-edit .btn-row { display: flex; gap: 6px; margin-top: 8px; }
+.model-edit button { font-family: inherit; font-size: 10px; padding: 3px 8px; border-radius: 3px; cursor: pointer; border: 1px solid var(--border); }
+.model-edit .btn-save { background: #1a2a1a; border-color: #3a5a3a; color: #6a6; }
+.model-edit .btn-remove { background: #2a1a1a; border-color: #5a3a3a; color: #a66; }
+.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+.dot-online { background: #4a8; }
+.dot-offline { background: #a44; }
+
+/* Plugin list */
+.plugin-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #1a1a1a; }
+.plugin-row:last-child { border-bottom: none; }
+.plugin-name { color: var(--text-bright); font-size: 13px; }
+.plugin-desc { font-size: 10px; color: var(--text-dim); }
+.plugin-links { display: flex; gap: 8px; align-items: center; }
+.plugin-links a { font-size: 11px; color: var(--accent); text-decoration: none; padding: 3px 8px; border: 1px solid var(--border); border-radius: 3px; }
+.plugin-links a:hover { border-color: var(--accent); }
+.plugin-status { font-size: 10px; padding: 2px 8px; border-radius: 3px; }
+.status-active { background: #1a2a1a; color: #4a8; }
+.status-inactive { background: #1a1a1a; color: #666; }
+
+/* Router stats */
+.router-model { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #1a1a1a; }
+.router-model:last-child { border-bottom: none; }
+.tag-local { color: #4a8; font-size: 9px; padding: 1px 4px; border: 1px solid #2a4a2a; border-radius: 2px; }
+.tag-api { color: #a86; font-size: 9px; padding: 1px 4px; border: 1px solid #4a3a2a; border-radius: 2px; }
+
+/* Settings */
+.setting-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 11px; border-bottom: 1px solid #1a1a1a; }
+.setting-row:last-child { border-bottom: none; }
+.setting-key { color: var(--text-dim); }
+.setting-val { color: var(--text); }
+</style>
+</head>
+<body>
+<div id="page">
+
+<div class="header">
+  <h1>ANIMA</h1>
+  <span class="version" id="version">v0.1.0 · <span id="engine-type">--</span></span>
+</div>
+
+<!-- Models -->
+<div class="section">
+  <div class="section-title">Models</div>
+  <div class="model-grid" id="models">
+    <div style="color:#666">Loading...</div>
+  </div>
+  <div style="margin-top:10px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+    <input type="text" id="add-model-url" placeholder="http://localhost:8080 or API key (sk-...)" style="font-family:inherit;font-size:11px;padding:4px 8px;background:var(--bg-input);border:1px solid var(--border);color:var(--text);border-radius:3px;flex:1;min-width:200px">
+    <button onclick="addModel()" style="font-family:inherit;font-size:10px;padding:4px 10px;background:#1a2a1a;border:1px solid #3a5a3a;color:#6a6;border-radius:3px;cursor:pointer">+ Add</button>
+  </div>
+</div>
+
+<!-- Plugins -->
+<div class="section">
+  <div class="section-title">Plugins</div>
+  <div id="plugins">
+    <div style="color:#666">Loading...</div>
+  </div>
+</div>
+
+<!-- Router Stats -->
+<div class="section">
+  <div class="section-title">Router — Model Dispatch (this session)</div>
+  <div id="router-stats" style="font-size:11px;color:var(--text-dim)">Loading...</div>
+</div>
+
+<!-- Task Routing -->
+<div class="section">
+  <div class="section-title">Task Routing (V3 scores)</div>
+  <div id="task-routing" style="font-size:11px">Loading...</div>
+</div>
+
+<!-- System -->
+<div class="section">
+  <div class="section-title">System</div>
+  <div id="system-info">
+    <div class="setting-row"><span class="setting-key">Core</span><span class="setting-val" id="s-core">--</span></div>
+    <div class="setting-row"><span class="setting-key">Mode</span><span class="setting-val" id="s-mode">--</span></div>
+  </div>
+</div>
+
+</div>
+
+<script>
+async function refresh() {
+  // Models
+  try {
+    const r = await fetch('/models');
+    const d = await r.json();
+    const el = document.getElementById('models');
+    const models = d.models || [];
+    if (models.length === 0) {
+      el.innerHTML = '<div style="color:#666">No models configured — add an endpoint below</div>';
+    } else {
+      el.innerHTML = models.map(m => {
+        const k = m.key;
+        const dot = m.online ? (m.enabled ? 'dot-online' : 'dot-offline') : 'dot-offline';
+        const status = m.online ? (m.enabled ? 'Online' : 'Disabled') : 'Offline';
+        const speed = m.tokens_per_second ? `${m.tokens_per_second.toFixed(1)} tok/s` : '';
+        const ctx = m.context_window ? `${(m.context_window/1024).toFixed(0)}K ctx` : '';
+        const flight = m.in_flight > 0 ? `${m.in_flight} in-flight` : '';
+        const p = m.profile || {};
+        const reasoning = p.reasoning_score ? `R:${(p.reasoning_score*100).toFixed(0)}` : '';
+        const stability = p.stability_score ? `S:${(p.stability_score*100).toFixed(0)}` : '';
+        return `<div class="model-card" style="${!m.enabled ? 'opacity:0.5' : ''}" onclick="toggleModelEdit('${k}')">
+          <div class="name"><span class="dot ${dot}"></span>${m.name || m.key}</div>
+          <div class="meta">
+            ${status} · ${m.tier} · ${m.backend}<br>
+            ${[speed, ctx, reasoning, stability, flight].filter(Boolean).join(' · ')}<br>
+            <span style="color:#555;font-size:9px">${m.endpoint || ''}</span>
+          </div>
+          <div class="model-edit" id="edit-${k}" onclick="event.stopPropagation()">
+            <label>Name</label>
+            <input id="me-name-${k}" value="${m.name || m.key}">
+            <label>Endpoint</label>
+            <input id="me-endpoint-${k}" value="${m.endpoint || ''}">
+            <label>Context Window (tokens)</label>
+            <input id="me-ctx-${k}" type="number" value="${m.context_window || 0}">
+            <label>Enabled</label>
+            <select id="me-enabled-${k}">
+              <option value="true" ${m.enabled?'selected':''}>Yes</option>
+              <option value="false" ${!m.enabled?'selected':''}>No</option>
+            </select>
+            ${m.backend === 'anthropic' ? `
+            <label>Claude Model</label>
+            <select id="me-claude-${k}">
+              <option value="claude-haiku-4-5-20251001" ${(m.claude_model||'').includes('haiku')?'selected':''}>Haiku 4.5 (fast, cheap)</option>
+              <option value="claude-sonnet-4-6" ${(m.claude_model||'').includes('sonnet')?'selected':''}>Sonnet 4.6 (balanced)</option>
+              <option value="claude-opus-4-6" ${(m.claude_model||'').includes('opus')?'selected':''}>Opus 4.6 (best reasoning)</option>
+            </select>
+            <label>API Key</label>
+            <input id="me-apikey-${k}" type="password" placeholder="sk-ant-..." value="">
+            <button style="font-family:inherit;font-size:9px;padding:2px 6px;margin-top:4px;background:#1a2a1a;border:1px solid #3a5a3a;color:#6a6;border-radius:3px;cursor:pointer" onclick="setApiKey('${k}')">Set Key</button>
+            ` : m.backend === 'openai' ? `
+            <label>API Key</label>
+            <input id="me-apikey-${k}" type="password" placeholder="sk-..." value="">
+            <button style="font-family:inherit;font-size:9px;padding:2px 6px;margin-top:4px;background:#1a2a1a;border:1px solid #3a5a3a;color:#6a6;border-radius:3px;cursor:pointer" onclick="setApiKey('${k}')">Set Key</button>
+            ` : ''}
+            <div class="btn-row">
+              <button class="btn-save" onclick="saveModel('${k}')">Save</button>
+              <button class="btn-remove" onclick="removeModel('${k}')">Remove</button>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  } catch(e) {}
+
+  // Plugins
+  try {
+    const r = await fetch('/plugins');
+    const d = await r.json();
+    const el = document.getElementById('plugins');
+    const plugins = d.plugins || [];
+    if (plugins.length === 0) {
+      el.innerHTML = '<div style="color:#666">No plugins installed</div>';
+    } else {
+      let bladeStatus = {};
+      try {
+        const br = await fetch('/blades/status');
+        const bd = await br.json();
+        bladeStatus = bd.plugins || {};
+      } catch(e) {}
+
+      el.innerHTML = plugins.map(p => {
+        const blade = bladeStatus[p.name] || {};
+        const beliefs = p.beliefs || blade.beliefs || 0;
+        const edges = p.edges || blade.edges || 0;
+        return `<div class="plugin-row">
+          <div>
+            <div class="plugin-name">${p.name}</div>
+            <div class="plugin-desc">${p.description || ''} ${beliefs > 0 ? `· ${beliefs} beliefs · ${edges} edges` : ''}</div>
+          </div>
+          <div class="plugin-links">
+            <a href="/plugin-dashboard/${p.name}" target="_blank">Dashboard</a>
+          </div>
+        </div>`;
+      }).join('');
+
+      document.getElementById('s-mode').textContent = d.active_mode || 'none';
+    }
+  } catch(e) {}
+
+  // Router stats — model call counts this session
+  try {
+    const r = await fetch('/models/status');
+    const d = await r.json();
+    const callLog = d.call_log || {};
+    const el = document.getElementById('router-stats');
+    const models = d.models || {};
+
+    const tokenLog = d.token_log || {};
+    let totalCalls = 0;
+    let totalApiCost = 0;
+    let totalSaved = 0;
+    const modelStats = [];
+    for (const [modelKey, tasks] of Object.entries(callLog)) {
+      const info = models[modelKey] || {};
+      const profile = info.profile || {};
+      const name = info.name || modelKey;
+      const backend = info.backend || 'unknown';
+      const taskTotal = Object.values(tasks).reduce((a, b) => a + b, 0);
+      totalCalls += taskTotal;
+      const tokens = tokenLog[modelKey] || 0;
+      const costPerToken = profile.cost_per_token || 0;
+      const cost = tokens * costPerToken;
+      const isLocal = (backend === 'llama-server' || backend === 'ollama');
+      const apiEquivalent = tokens * 0.000015;
+      if (isLocal) totalSaved += apiEquivalent;
+      else totalApiCost += cost;
+      const taskList = Object.entries(tasks).map(([t,c]) => `${t}:${c}`).join(', ');
+      const costStr = isLocal ? `~${(tokens/1000).toFixed(0)}K tok` : `$${cost.toFixed(4)}`;
+      modelStats.push({name, total: taskTotal, tasks: taskList, costStr, isLocal, cost, backend});
+    }
+    modelStats.sort((a, b) => b.total - a.total);
+
+    if (totalCalls === 0) {
+      el.innerHTML = '<span style="color:#555">No calls yet this session</span>';
+    } else {
+      const costLine = totalApiCost > 0 ? `<span style="color:#a86">API: $${totalApiCost.toFixed(4)}</span>` : '';
+      const savedLine = totalSaved > 0 ? `<span style="color:#4a8">Saved: ~$${totalSaved.toFixed(2)} (local inference)</span>` : '';
+      el.innerHTML = `<div style="margin-bottom:8px;display:flex;gap:12px;flex-wrap:wrap">`+
+        `<span style="color:var(--accent)">${totalCalls} calls</span> ${costLine} ${savedLine}</div>` +
+        modelStats.map(m => {
+          const tag = m.isLocal
+            ? `<span class="tag-local">LOCAL</span>`
+            : `<span class="tag-api">API</span>`;
+          return `<div class="router-model">` +
+            `<span style="color:var(--text-bright)">${m.name} ${tag}</span>` +
+            `<span>${m.total} calls · ${m.costStr} <span style="color:#555;font-size:9px">${m.tasks}</span></span></div>`;
+        }).join('');
+    }
+
+    // Task routing with V3 scores
+    const routing = d.task_routing || {};
+    const trEl = document.getElementById('task-routing');
+    const taskRows = Object.entries(routing).map(([task, info]) => {
+      const cls = info.task_class || '?';
+      const handlers = (info.handlers || []).map(h => {
+        const mInfo = models[h.model] || {};
+        const name = (mInfo.name || h.model).substring(0, 15);
+        const online = h.online ? '' : ' (off)';
+        return `<span style="color:${h.online ? 'var(--text)' : '#555'}">${name}:${h.score}${online}</span>`;
+      }).join(' &gt; ');
+      const flags = [info.pause_only ? 'pause' : '', info.safe_fallback ? 'fallback' : ''].filter(Boolean).join(',');
+      return `<div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid #1a1a1a">` +
+        `<span><span style="color:var(--accent)">${task}</span> <span style="color:#555;font-size:9px">${cls}${flags ? ' ['+flags+']' : ''}</span></span>` +
+        `<span style="font-size:10px">${handlers}</span></div>`;
+    });
+    trEl.innerHTML = taskRows.join('');
+  } catch(e) { console.warn('router stats:', e); }
+
+  // Engine type
+  try {
+    const r = await fetch('/status');
+    const s = await r.json();
+    document.getElementById('s-core').textContent = s.awake ? 'Running' : 'Sleeping';
+  } catch(e) {}
+  document.getElementById('engine-type').textContent = 'Rust core';
+}
+
+function toggleModelEdit(key) {
+  const el = document.getElementById('edit-' + key);
+  if (el) el.classList.toggle('open');
+}
+
+async function saveModel(key) {
+  const name = document.getElementById('me-name-' + key).value;
+  const endpoint = document.getElementById('me-endpoint-' + key).value;
+  const ctx = parseInt(document.getElementById('me-ctx-' + key).value) || 8192;
+  const enabled = document.getElementById('me-enabled-' + key).value === 'true';
+  const body = {name, endpoint, context_window: ctx, enabled};
+  const claudeEl = document.getElementById('me-claude-' + key);
+  if (claudeEl) body.claude_model = claudeEl.value;
+  try {
+    await fetch(`/models/${key}/update`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    await fetch('/models/persist', {method: 'POST'});
+    refresh();
+  } catch(e) { console.warn(e); }
+}
+
+async function removeModel(key) {
+  if (!confirm(`Remove model "${key}"?`)) return;
+  try {
+    await fetch(`/models/${key}/remove`, {method: 'POST'});
+    refresh();
+  } catch(e) { console.warn(e); }
+}
+
+async function addModel() {
+  const input = document.getElementById('add-model-url').value.trim();
+  if (!input) return;
+  let body;
+  if (input.startsWith('sk-ant')) {
+    body = {key: 'anthropic', name: 'Claude (Anthropic API)', endpoint: 'https://api.anthropic.com',
+            backend: 'anthropic', api_key: input, context_window: 200000};
+  } else if (input.startsWith('sk-')) {
+    body = {key: 'openai', name: 'OpenAI API', endpoint: 'https://api.openai.com/v1',
+            backend: 'openai', api_key: input, context_window: 128000};
+  } else {
+    // Normalize: add http:// if missing
+    let endpoint = input;
+    if (!endpoint.startsWith('http://') && !endpoint.startsWith('https://')) {
+      endpoint = 'http://' + endpoint;
+    }
+    const shortKey = endpoint.replace(/https?:\/\//, '').replace(/[^a-z0-9]/gi, '_');
+    body = {key: shortKey, endpoint: endpoint};
+  }
+  try {
+    const r = await fetch('/models/add', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (d.error) { console.warn(d.error); }
+    document.getElementById('add-model-url').value = '';
+    refresh();
+  } catch(e) { console.warn(e); }
+}
+
+async function setApiKey(modelKey) {
+  const input = document.getElementById('me-apikey-' + modelKey);
+  if (!input || !input.value.trim()) return;
+  try {
+    const r = await fetch('/models/set-api-key', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({api_key: input.value.trim(), env_var: 'ANTHROPIC_API_KEY'}),
+    });
+    const d = await r.json();
+    if (d.status === 'set') {
+      input.value = '';
+      input.placeholder = 'Key set';
+      await fetch('/models/health-check', {method: 'POST'});
+      refresh();
+    }
+  } catch(e) { console.warn(e); }
+}
+
+refresh();
+setInterval(() => {
+  if (!document.querySelector('.model-edit.open')) refresh();
+}, 10000);
+</script>
+</body>
+</html>

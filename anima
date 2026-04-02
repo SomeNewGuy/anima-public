@@ -1,0 +1,139 @@
+#!/bin/bash
+# ANIMA Platform Launcher
+#
+# Usage:
+#   anima start      Start the platform (all plugins load automatically)
+#   anima stop       Stop the platform
+#   anima status     Show platform status
+
+ANIMA_ROOT="$(cd "$(dirname "$0")" && pwd)"
+VENV="$ANIMA_ROOT/persistence-env/bin/activate"
+LOG_DIR="$ANIMA_ROOT/logs"
+
+_get_port() {
+    local port
+    port=$(grep -m1 'port' "$ANIMA_ROOT/config/settings.toml" 2>/dev/null | sed 's/.*= *//' | tr -d ' ')
+    echo "${port:-8900}"
+}
+
+_pid_for_port() {
+    lsof -ti ":$1" 2>/dev/null | head -1
+}
+
+_all_pids_for_port() {
+    lsof -ti ":$1" 2>/dev/null
+}
+
+_kill_stale_workers() {
+    # Scan plugin worker scripts for --port defaults, kill anything occupying them
+    for app in "$ANIMA_ROOT"/plugins/*/dashboard/app.py; do
+        [ -f "$app" ] || continue
+        port=$(grep -oP 'default=\K[0-9]+' <<< "$(grep '\-\-port' "$app")" 2>/dev/null)
+        if [ -n "$port" ]; then
+            stale=$(_all_pids_for_port "$port")
+            if [ -n "$stale" ]; then
+                echo "Killing stale worker(s) on port $port"
+                echo "$stale" | xargs kill 2>/dev/null
+                sleep 1
+                survivors=$(_all_pids_for_port "$port")
+                [ -n "$survivors" ] && echo "$survivors" | xargs kill -9 2>/dev/null
+            fi
+        fi
+    done
+}
+
+case "$1" in
+    start)
+        PORT=$(_get_port)
+        pid=$(_pid_for_port "$PORT")
+        if [ -n "$pid" ]; then
+            echo "ANIMA already running on port $PORT (pid $pid)"
+            exit 1
+        fi
+
+        # Kill orphaned plugin workers from previous runs
+        _kill_stale_workers
+
+        # Clear pycache
+        find "$ANIMA_ROOT" -path "*/persistence-env" -prune -o \
+            -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null
+
+        mkdir -p "$LOG_DIR"
+        source "$VENV"
+        cd "$ANIMA_ROOT"
+
+        nohup python -m uvicorn interface.web_server:app \
+            --host 0.0.0.0 --port "$PORT" --workers 1 \
+            > "$LOG_DIR/anima.log" 2>&1 &
+        disown
+
+        echo "ANIMA starting on port $PORT (pid $!)"
+        echo "Log: $LOG_DIR/anima.log"
+
+        # Wait for ready
+        for i in $(seq 1 60); do
+            sleep 1
+            if curl -s --max-time 2 "http://localhost:$PORT/plugins" > /dev/null 2>&1; then
+                echo "ANIMA UP on port $PORT"
+                exit 0
+            fi
+        done
+        echo "ANIMA still loading... check log"
+        ;;
+    stop)
+        PORT=$(_get_port)
+        pid=$(_pid_for_port "$PORT")
+        if [ -n "$pid" ]; then
+            # Kill entire process tree — ANIMA + all plugin workers
+            # Get all descendants first
+            tree_pids=$(pgrep -P "$pid" 2>/dev/null)
+            for child in $tree_pids; do
+                grandchildren=$(pgrep -P "$child" 2>/dev/null)
+                tree_pids="$tree_pids $grandchildren"
+            done
+            # Graceful kill: main process + all children
+            kill "$pid" $tree_pids 2>/dev/null
+            sleep 2
+            # Force-kill any survivors
+            for p in $pid $tree_pids; do
+                kill -0 "$p" 2>/dev/null && kill -9 "$p" 2>/dev/null
+            done
+            echo "ANIMA stopped (port $PORT)"
+        else
+            echo "ANIMA not running"
+        fi
+        # Always clean up orphaned workers even if ANIMA wasn't running
+        _kill_stale_workers
+        ;;
+    status)
+        PORT=$(_get_port)
+        pid=$(_pid_for_port "$PORT")
+        if [ -n "$pid" ]; then
+            echo "ANIMA running on port $PORT (pid $pid)"
+            curl -s "http://localhost:$PORT/blades/status" 2>/dev/null | python3 -m json.tool 2>/dev/null
+        else
+            echo "ANIMA not running"
+        fi
+        ;;
+    list)
+        echo "=== Plugins ==="
+        PLUGIN_DIR="$ANIMA_ROOT/plugins"
+        for d in "$PLUGIN_DIR"/*/; do
+            name=$(basename "$d")
+            toml="$d/plugin.toml"
+            if [ -f "$toml" ]; then
+                ver=$(grep -m1 'version' "$toml" | sed 's/.*= *"//' | tr -d '"')
+                desc=$(grep -m1 'description' "$toml" | sed 's/.*= *"//' | tr -d '"')
+                echo "  $name v${ver:-?} — ${desc:-no description}"
+            fi
+        done
+        ;;
+    *)
+        echo "ANIMA Platform"
+        echo ""
+        echo "  anima start    Start platform (all plugins load automatically)"
+        echo "  anima stop     Stop platform"
+        echo "  anima status   Show platform status"
+        echo "  anima list     Show discovered plugins"
+        ;;
+esac
