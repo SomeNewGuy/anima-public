@@ -1,20 +1,3 @@
-# Copyright (C) 2026 Gerald Teeple
-#
-# This file is part of ANIMA.
-#
-# ANIMA is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# ANIMA is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with ANIMA. If not, see <https://www.gnu.org/licenses/>.
-
 """Document extractor — per-document belief extraction via LLM.
 
 Different from conversation extraction: extracts factual claims, design decisions,
@@ -103,7 +86,7 @@ class DocumentExtractor:
         self.config = config
         self._config_ref = config  # for PDF extractor access
         extraction_cfg = config.get("extraction", {})
-        self.max_beliefs = extraction_cfg.get("max_beliefs_per_document", 10)
+        self._min_beliefs = 5  # floor for tiny documents
         self.extraction_max_tokens = extraction_cfg.get(
             "extraction_max_tokens",
             config.get("reflection", {}).get("analysis_max_tokens", 1024),
@@ -112,6 +95,11 @@ class DocumentExtractor:
         ctx_window = config.get("model", {}).get("context_window", 16384)
         # ~3 chars per token estimate, reserve 30% for prompt overhead + response
         self.context_budget_chars = int(ctx_window * 3 * 0.70)
+
+    def _estimate_max_beliefs(self, content):
+        """Scale max beliefs with document size. ~1 belief per 50 tokens (~150 chars)."""
+        estimated_tokens = len(content) // 3
+        return max(self._min_beliefs, estimated_tokens // 50)
 
     def extract(self, content, filename, file_type, sha256):
         """Extract beliefs from a single document.
@@ -134,11 +122,12 @@ class DocumentExtractor:
         else:
             prompt_template = DOCUMENT_EXTRACTION_PROMPT
 
+        max_beliefs = self._estimate_max_beliefs(content)
         prompt_text = prompt_template.format(
             content=content,
             filename=filename,
             file_type=file_type,
-            max_beliefs=self.max_beliefs,
+            max_beliefs=max_beliefs,
         )
 
         if plugin_prompts and plugin_prompts.get("system_prompt"):
@@ -207,7 +196,7 @@ class DocumentExtractor:
             content=content,
             filename=filename,
             file_type=file_type,
-            max_beliefs=self.max_beliefs,
+            max_beliefs=max_beliefs,
         )
 
         messages = [
@@ -279,7 +268,8 @@ class DocumentExtractor:
                 content=doc["content"],
             ))
 
-        max_beliefs_total = self.max_beliefs * len(documents)
+        total_content = "".join(d.get("content", "") for d in documents)
+        max_beliefs_total = self._estimate_max_beliefs(total_content)
         prompt_text = BATCH_EXTRACTION_PROMPT.format(
             doc_count=len(documents),
             max_beliefs=max_beliefs_total,
@@ -428,7 +418,7 @@ class DocumentExtractor:
                 f"First 200 chars: {response[:200]}"
             )
 
-        return beliefs[:self.max_beliefs]
+        return beliefs
 
     def _parse_batch_response(self, response, docid_map):
         """Parse BELIEF lines from batch extraction with DOCID provenance.

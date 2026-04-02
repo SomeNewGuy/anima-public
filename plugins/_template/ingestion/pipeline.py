@@ -1040,35 +1040,7 @@ class DocumentPipeline:
 
         logger.info(f"Post-ingest dreams: {completed}/{cycles} cycles completed")
 
-        # Regenerate belief graph after dreams create new edges
-        if completed > 0:
-            self._regenerate_graph()
-
         return completed
-
-    def _regenerate_graph(self):
-        """Regenerate the static belief graph HTML/JSON after dream passes."""
-        try:
-            project_root = os.path.normpath(
-                os.path.join(os.path.dirname(__file__), "..")
-            )
-            script = os.path.join(project_root, "analysis", "tools", "belief_graph.py")
-            cmd = ["python3", script]
-            data_dir = os.environ.get("ANIMA_DATA_DIR")
-            if data_dir:
-                db = os.path.join(data_dir, "sqlite", "persistence.db")
-                out = os.path.join(os.path.dirname(data_dir), "analysis", "output")
-                cmd.extend(["--db", db, "--output-dir", out])
-            result = subprocess.run(
-                cmd, cwd=project_root,
-                capture_output=True, text=True, timeout=30,
-            )
-            if result.returncode == 0:
-                logger.info("Belief graph regenerated after dreams")
-            else:
-                logger.warning(f"Graph regeneration failed: {result.stderr[:200]}")
-        except Exception as e:
-            logger.warning(f"Graph regeneration error: {e}")
 
     def run_full(self, limit=None):
         """Run the full pipeline: scan → ingest.
