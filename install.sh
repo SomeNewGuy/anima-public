@@ -12,7 +12,7 @@ DATA_DIR="$ANIMA_ROOT/data"
 
 # ─── Release Config ───
 GITHUB_REPO="SomeNewGuy/anima-public"
-CORE_VERSION="0.1.0"
+CORE_VERSION="0.1.1"
 
 # ─── Detect Platform ───
 OS="$(uname -s)"
