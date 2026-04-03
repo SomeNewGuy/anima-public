@@ -15,10 +15,11 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with ANIMA. If not, see <https://www.gnu.org/licenses/>.
 
+
 """Self-organizing domain classifier for Research product.
 
 Discovers domain structure from the corpus itself — no hardcoded keywords.
-Works for any field — domains are discovered from the corpus, not hardcoded.
+Works for any field: oncology, marine biology, materials science, medieval history.
 
 Architecture (Opus spec):
 - Option A: Corpus-derived domains via embedding clusters
@@ -44,9 +45,12 @@ logger = logging.getLogger("ingestion.domain_classifier")
 
 
 
-# Canonical domain base — self-organizing from corpus.
-# Starts empty. Domains are discovered and created from ingested content
-# via LLM classification. No hardcoded domain knowledge.
+# Fixed canonical domain base — anchors that don't drift
+# Default canonical domains — empty. Plugins define their own via config:
+#   [extraction]
+#   domain_seed_signals = {name = "description", ...}
+#
+# If no config provided, the classifier is purely self-organizing.
 CANONICAL_DOMAINS = {}
 
 # Garbage labels — hard kill on startup
@@ -79,6 +83,11 @@ class DomainClassifier:
 
         # Unmatched tracker for new domain creation
         self._unmatched_buffer = []  # beliefs that didn't match any canonical domain
+
+        # Load domain seed signals from plugin config
+        seed_signals = self.config.get("extraction", {}).get("domain_seed_signals", {})
+        if seed_signals and isinstance(seed_signals, dict):
+            CANONICAL_DOMAINS.update(seed_signals)
 
     def _init_canonical_centroids(self):
         """Precompute embeddings for canonical domain descriptions."""
@@ -410,7 +419,7 @@ class DomainClassifier:
         if canonical_fallback and canonical_fallback != "unclassified":
             return canonical_fallback
 
-        return "general"  # Fallback when no domain can be determined
+        return "cancer_biology"  # Safe default for Research product
 
     def _name_cluster(self, representative_statements, fallback_idx):
         """Name a cluster from its representative beliefs.

@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with ANIMA. If not, see <https://www.gnu.org/licenses/>.
 
+
 """Filesystem scanner — walks datafiles directory, hashes files, manages document ledger.
 
 Populates the document_ledger table in persistence.db with SHA256 hashes,
@@ -221,7 +222,7 @@ class DocumentScanner:
         """Return documents with status='indexed', FIFO order (oldest first)."""
         query = (
             "SELECT sha256, filename, file_path, file_type, size_bytes "
-            "FROM document_ledger WHERE status = 'indexed' "
+            "FROM document_ledger WHERE status = 'indexed' OR (status = 'ingested' AND belief_count = 0) "
             "ORDER BY indexed_at ASC"
         )
         if limit:

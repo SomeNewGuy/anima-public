@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with ANIMA. If not, see <https://www.gnu.org/licenses/>.
 
+
 """Belief proposal interface — standardized shape for all belief sources.
 
 Every path that wants to create or modify a belief produces a BeliefProposal.
@@ -336,9 +337,9 @@ class ProposalGateway:
         self._strategies: dict[str, TriageStrategy] = {}
         self._default_strategy = DefaultTriageStrategy()
         self._governance = (config or {}).get("_governance", {
-            "allow_auto_accept": False,
-            "allow_auto_corrections": False,
-            "allow_auto_lessons": False,
+            "allow_auto_accept": True,
+            "allow_auto_corrections": True,
+            "allow_auto_lessons": True,
         })
         self._depth_layer = (
             DepthAwareTriageLayer(config, inference_engine)
@@ -378,7 +379,7 @@ class ProposalGateway:
         decision = strategy.evaluate(proposal)
 
         # Governance override — monarchy blocks auto-accepts
-        if (not self._governance.get("allow_auto_accept", False)
+        if (not self._governance.get("allow_auto_accept", True)
                 and decision.decision == "accept"):
             decision = TriageDecision(
                 decision="queue",

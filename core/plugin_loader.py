@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with ANIMA. If not, see <https://www.gnu.org/licenses/>.
 
+
 """Plugin discovery, loading, and lifecycle management.
 
 Scans the plugins/ directory for plugin.toml manifests, imports each

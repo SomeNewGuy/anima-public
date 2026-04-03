@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with ANIMA. If not, see <https://www.gnu.org/licenses/>.
 
+
 """Rust-backed semantic memory — thin wrapper around anima_core.Engine.
 
 Drop-in replacement for semantic.py. All core operations (beliefs, links,

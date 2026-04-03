@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with ANIMA. If not, see <https://www.gnu.org/licenses/>.
 
+
 """Document ingestion pipeline — orchestrates scan → extract → govern → store.
 
 This is the main entry point for document ingestion. It:
@@ -311,7 +312,7 @@ class DocumentPipeline:
             doc for doc in loaded_docs
             if self.scanner.get_belief_count(doc["sha256"]) == 0
         ]
-        if zero_docs and len(loaded_docs) > len(zero_docs):
+        if zero_docs:
             logger.info(
                 f"Retry extraction: {len(zero_docs)} docs produced 0 beliefs, "
                 f"retrying sequentially with primary model"

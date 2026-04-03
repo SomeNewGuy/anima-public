@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with ANIMA. If not, see <https://www.gnu.org/licenses/>.
 
+
 """Multi-model routing — distributes inference tasks across available LLM endpoints.
 
 Routes by capability vectors: models have measured scores (reasoning, speed,
@@ -700,8 +701,9 @@ class ModelRouter:
         if self._core_engine:
             try:
                 self._core_engine.update_model_online(model_key, online)
-            except Exception:
-                pass
+                logger.info(f"Rust sync: {model_key} → {'online' if online else 'offline'}")
+            except Exception as e:
+                logger.warning(f"Rust sync FAILED for {model_key}: {e}")
 
     def _system_pressure(self):
         """System-wide load ratio (0.0 = idle, 1.0 = saturated)."""
@@ -814,7 +816,45 @@ class ModelRouter:
                     self.calibrate(n)
                 self._save_calibration_cache()
 
+        # Start slot monitor — polls real server state to detect idle models
+        self._start_slot_monitor()
+
         return self
+
+    def _start_slot_monitor(self):
+        """Background thread that polls server slots every 3 seconds.
+
+        When a model's server is idle (is_processing=false) but Rust thinks
+        it's at capacity, sweep expired reservations to free the slot.
+        This handles external usage (Stephen) and leaked reservations.
+        """
+        import requests as _req
+
+        def _monitor():
+            while True:
+                try:
+                    time.sleep(3)
+                    for name, info in self.models.items():
+                        if not info.online or not info.enabled:
+                            continue
+                        if info.backend in ("anthropic", "ollama"):
+                            continue  # can't check slots on these
+
+                        try:
+                            r = _req.get(f"{info.endpoint}/slots", timeout=2)
+                            if r.status_code == 200:
+                                slots = r.json()
+                                if slots and not slots[0].get("is_processing", True):
+                                    # Server idle — force-clear if Rust thinks busy
+                                    self._core_engine.force_clear_model(name)
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+
+        t = threading.Thread(target=_monitor, name="slot-monitor", daemon=True)
+        t.start()
+        logger.info("Slot monitor started (3s poll)")
 
     def _load_cached_calibration(self):
         """Load cached tok/s from config. Skip LLM calls for known models."""
@@ -1159,6 +1199,7 @@ class ModelRouter:
             "parallel_ok": getattr(descriptor, 'parallel_ok', True),
             "typical_tokens": getattr(descriptor, 'typical_tokens', 1024),
             "priority": getattr(descriptor, 'priority', 2),
+            "prefer": getattr(descriptor, 'prefer', 'speed'),
             "plugin_id": getattr(descriptor, 'plugin_id', '') or self.get_active_plugin() or '',
         }
 
@@ -1218,12 +1259,23 @@ class ModelRouter:
     def _release(self, reservation_id):
         """Release a reservation via Rust. Idempotent."""
         if reservation_id:
-            self._core_engine.release_reservation(reservation_id)
+            try:
+                self._core_engine.release_reservation(reservation_id)
+            except Exception as e:
+                logger.warning(f"Reservation release failed (rid={reservation_id}): {e}")
 
     def _record_result(self, reservation_id, success, latency_ms):
         """Record result + release via Rust. Preferred completion path."""
         if reservation_id:
-            self._core_engine.record_result_v2(reservation_id, success, latency_ms)
+            try:
+                self._core_engine.record_result_v2(reservation_id, success, latency_ms)
+            except Exception as e:
+                logger.warning(f"Record result failed (rid={reservation_id}): {e}")
+                # Fallback — try raw release
+                try:
+                    self._core_engine.release_reservation(reservation_id)
+                except Exception:
+                    pass
 
     def _log_dispatch(self, model_name, task_label, messages, max_tokens):
         """Thread-safe dispatch logging."""
@@ -1249,46 +1301,39 @@ class ModelRouter:
     def _acquire_engine(self, descriptor, estimated_tokens, timeout):
         """Block until a model with capacity is available, then reserve it.
 
-        Rust scheduler owns capacity. Python just loops calling
-        select_and_reserve until a slot is granted.
+        Uses Rust wait_and_reserve — blocks on a condvar signaled by every
+        reservation release. Plugin-fair: starvation boost ensures no plugin
+        is permanently starved. No Python polling loop needed.
 
         Returns (engine, model_name, reservation_id).
         Caller MUST call _release(reservation_id) or
         _record_result(reservation_id, ...) when done.
         """
         label = getattr(descriptor, 'label', None) or descriptor.task_class
-        logged = False
-        wait_start = time.time()
-        backoff = 0.1  # start at 100ms, grow to max 2s
 
         if self._core_engine:
             desc_dict = self._build_task_desc_dict(descriptor)
 
-            while True:
-                sel = self._core_engine.select_and_reserve(desc_dict)
-                if sel is not None:
-                    model_key = sel["model"]
-                    rid = sel["reservation_id"]
-                    if model_key in self._engines:
-                        if logged:
-                            wait_s = int(time.time() - wait_start)
-                            logger.info(f"Model acquired for '{label}' after {wait_s}s wait: {model_key}")
-                        return self._engines[model_key], model_key, rid
-                    else:
-                        # Model exists in Rust but no Python engine — release and skip
-                        self._core_engine.release_reservation(rid)
+            # Rust blocks with condvar — releases GIL so other threads proceed
+            # timeout_ms=0 would wait forever, use 10 minutes as safety
+            timeout_ms = int(timeout * 1000) if timeout else 600_000
+            sel = self._core_engine.wait_and_reserve(desc_dict, timeout_ms)
 
-                # No capacity — wait with backoff
-                if not logged:
-                    logger.info(f"Queued: '{label}' waiting for model capacity")
-                    logged = True
+            if sel is not None:
+                model_key = sel["model"]
+                rid = sel["reservation_id"]
+                if model_key in self._engines:
+                    return self._engines[model_key], model_key, rid
+                else:
+                    self._core_engine.release_reservation(rid)
+                    # Shouldn't happen — model in Rust but not Python
+                    raise RuntimeError(f"Model '{model_key}' has no Python engine")
 
-                any_online = any(m.online and m.enabled for m in self.models.values())
-                if not any_online:
-                    raise RuntimeError(f"No models online for '{label}'")
-
-                time.sleep(backoff)
-                backoff = min(backoff * 1.5, 2.0)
+            # Timed out — check if models are online
+            any_online = any(m.online and m.enabled for m in self.models.values())
+            if not any_online:
+                raise RuntimeError(f"No models online for '{label}'")
+            raise RuntimeError(f"Timeout acquiring model for '{label}' after {timeout}s")
 
     def generate(self, prompt, system_context="", max_tokens=None, task=None):
         from core.task_presets import resolve_task

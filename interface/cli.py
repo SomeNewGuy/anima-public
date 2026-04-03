@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with ANIMA. If not, see <https://www.gnu.org/licenses/>.
 
+
 """Persistence CLI — conversation interface with memory persistence.
 
 Commands:
@@ -183,7 +184,7 @@ class PersistenceCLI:
         # Document retrieval (DMS layer — optional, only when datafiles_dir configured)
         doc_retrieval = None
         if self.config.get("extraction", {}).get("datafiles_dir"):
-            from plugins._template.ingestion.document_retrieval import DocumentRetrieval
+            from plugins.dms.ingestion.document_retrieval import DocumentRetrieval
             doc_retrieval = DocumentRetrieval(
                 self.semantic.db_conn, self.config, semantic_memory=self.semantic,
             )
@@ -407,7 +408,7 @@ class PersistenceCLI:
         messages = [{"role": "system", "content": system_context}]
 
         # Include prior turns from this session so the model can see
-        # what it and the operator have already said (conversation continuity).
+        # what it and Jerry have already said (conversation continuity).
         # Budget: keep conversation history within ~60% of remaining context
         # after system prompt. Rough estimate: 4 chars ≈ 1 token.
         context_window = self.config["model"]["context_window"]
@@ -699,7 +700,7 @@ class PersistenceCLI:
         conf_threshold = cur_cfg.get("gap_confidence_threshold", 0.3)
 
         for q in matched_questions:
-            # Use user_input as the answer (operator provided the info)
+            # Use user_input as the answer (Jerry provided the info)
             answer = user_input
             self.curiosity.resolve_question(
                 q["id"], answer, answered_by="conversation"
@@ -822,7 +823,7 @@ class PersistenceCLI:
         if self.turn_count < fat_cfg.get("min_turns_before_check", 5):
             return "ok"
 
-        # Cooldown: skip if operator denied a proposal within last 3 turns
+        # Cooldown: skip if Jerry denied a proposal within last 3 turns
         if self.turn_count - self._fatigue_denial_turn < 3:
             return "ok"
 

@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with ANIMA. If not, see <https://www.gnu.org/licenses/>.
 
+
 """Web interface for ANIMA — FastAPI backend serving chat + dashboard.
 
 Architecture:
@@ -2109,7 +2110,7 @@ async def restore_contradiction(contradiction_id: str):
     return JSONResponse({"error": "Contradiction not found"}, status_code=404)
 
 
-# Document pipeline endpoints moved to plugin endpoints.py
+# Document pipeline endpoints moved to plugins/dms/endpoints.py
 
 
 # ── Model routing management ──────────────────────────────────────────
@@ -2336,7 +2337,7 @@ async def models_probe_and_add(request: Request):
 async def models_probe(request: Request):
     """Probe an endpoint to auto-detect backend, model, and capabilities.
 
-    Body: {"host": "localhost", "port": 8080}
+    Body: {"host": "192.168.1.116", "port": 8080}
     Returns detected info: backend, model_name, tier, context_window, roles, etc.
     """
     try:

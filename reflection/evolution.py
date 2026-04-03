@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with ANIMA. If not, see <https://www.gnu.org/licenses/>.
 
+
 """Evolution engine — sleep consolidation, belief management, and self-assessment.
 
 Three trigger points:
@@ -278,9 +279,9 @@ class EvolutionEngine:
             EvolutionLessonTriageStrategy,
         )
         self._governance = self.config.get("_governance", {
-            "allow_auto_accept": False,
-            "allow_auto_corrections": False,
-            "allow_auto_lessons": False,
+            "allow_auto_accept": True,
+            "allow_auto_corrections": True,
+            "allow_auto_lessons": True,
         })
 
         # Capability checks — log when optional config is missing
@@ -2228,9 +2229,9 @@ class EvolutionEngine:
         }
 
         governance = {
-            "allow_auto_accept": self._governance.get("allow_auto_accept", False),
-            "allow_auto_corrections": self._governance.get("allow_auto_corrections", False),
-            "allow_auto_lessons": self._governance.get("allow_auto_lessons", False),
+            "allow_auto_accept": self._governance.get("allow_auto_accept", True),
+            "allow_auto_corrections": self._governance.get("allow_auto_corrections", True),
+            "allow_auto_lessons": self._governance.get("allow_auto_lessons", True),
         }
 
         # Start the triage state machine
@@ -3674,23 +3675,61 @@ class EvolutionEngine:
     def _assign_belief_domain(self, belief):
         """Assign a semantic domain label to a belief for dream stratification.
 
-        Uses the self-organizing domain classifier (topics field).
-        No hardcoded domain keywords — classification is corpus-driven.
+        Sources (in priority order):
+        1. topics field (if populated by domain classifier)
+        2. tree_paths (hierarchical placement from knowledge tree)
+        3. tag registry (structural tags from tag backfill)
+        4. source_type fallback (meta/identity)
+        5. "other"
+
+        No hardcoded domain keywords — all classification is corpus-driven.
         """
-        # Use topics from self-organizing classifier if available
+        import json as _json
+
+        # 1. Topics field (legacy, still works if populated)
         topics = belief.get("topics")
         if topics:
             if isinstance(topics, str):
                 try:
-                    import json as _json
                     topics = _json.loads(topics)
                 except (ValueError, TypeError):
                     topics = []
             if topics and isinstance(topics, list) and topics[0] != "operator":
-                # Normalize: lowercase, strip whitespace
                 return topics[0].lower().strip()
 
-        # Fallback for meta-observations
+        # 2. Tree paths — use the deepest node name as domain
+        tree_paths = belief.get("tree_paths")
+        if tree_paths:
+            if isinstance(tree_paths, str):
+                try:
+                    tree_paths = _json.loads(tree_paths)
+                except (ValueError, TypeError):
+                    tree_paths = []
+            if tree_paths and isinstance(tree_paths, list):
+                # Each path is [root, ..., leaf]. Use the second level as domain
+                # (first level is too broad, deepest is too specific)
+                for path in tree_paths:
+                    if isinstance(path, list) and len(path) >= 2:
+                        return path[1].lower().strip()
+                    elif isinstance(path, list) and len(path) == 1:
+                        return path[0].lower().strip()
+
+        # 3. Tag registry — find this belief's primary tag
+        bid = belief.get("id")
+        if bid and hasattr(self, 'semantic') and self.semantic and self.semantic.db_conn:
+            try:
+                row = self.semantic.db_conn.execute(
+                    "SELECT tr.name FROM belief_tags bt "
+                    "JOIN tag_registry tr ON bt.tag_id = tr.id "
+                    "WHERE bt.belief_id = ? ORDER BY bt.confidence DESC LIMIT 1",
+                    (bid,),
+                ).fetchone()
+                if row:
+                    return row[0].lower().strip()
+            except Exception:
+                pass
+
+        # 4. Source type fallback
         st = belief.get("source_type", "")
         if st in ("meta", "identity"):
             return "identity" if st == "identity" else "meta"

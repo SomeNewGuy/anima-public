@@ -1,6 +1,13 @@
-# Plugin-specific settings
-# Only plugin-specific sections go here.
-# Models, routing, hardware — all in core config/settings.toml.
-
 [product]
 mode = "my-plugin"
+
+[memory]
+sqlite_path = "data/sqlite/persistence.db"
+chroma_persist_dir = "data/chroma"
+
+[extraction]
+datafiles_dir = "plugins/_template/corpus"
+include_types = [ ".txt", ".md", ".pdf",]
+
+# Tasks are defined per plugin. See plugins/dms/config/settings.toml for examples.
+# The template has no task overrides — uses whatever the active plugin configures.

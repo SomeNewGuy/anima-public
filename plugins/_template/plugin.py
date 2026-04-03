@@ -15,103 +15,102 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with ANIMA. If not, see <https://www.gnu.org/licenses/>.
 
+
+"""ANIMA Plugin — my-plugin.
+
+Replace this docstring with a description of what your plugin does.
+Rename the class and update plugin.toml to match.
 """
-Plugin template — copy this folder, rename it, and start building.
 
-Quick start:
-  1. cp -r plugins/_template plugins/my-plugin
-  2. Edit plugins/my-plugin/plugin.toml (set name, mode, description)
-  3. Edit plugins/my-plugin/plugin.py (this file)
-  4. ./anima start — your plugin loads automatically
-
-Your plugin gets:
-  - Isolated SQLite + ChromaDB (via engine.semantic)
-  - Shared model router (via engine.router)
-  - Belief system (add, search, link, dream)
-  - Curiosity gaps, approval queue
-  - Its own dashboard endpoints (mount on FastAPI)
-
-See core/plugin_loader.py for the full AnimaPlugin interface.
-"""
+import logging
 
 from core.plugin_loader import AnimaPlugin
 
+logger = logging.getLogger("plugins.my-plugin")
+
 
 class MyPlugin(AnimaPlugin):
-    """Drop-in plugin for ANIMA. All methods are optional — override what you need."""
+    """Plugin implementation.
+
+    Override only the methods you need. All defaults are safe no-ops.
+
+    Lifecycle:
+        1. register_tables(db_conn)   — called once on engine init
+        2. register_endpoints(app)    — called once for FastAPI routes
+        3. on_start(engine)           — engine fully ready
+        4. tick(engine)               — called each blade cycle (non-blocking)
+        5. on_stop(engine)            — shutdown
+
+    Inference contract:
+        ALWAYS use engine.inference.request() — never call router directly.
+
+        result = engine.inference.request(
+            messages,
+            task="extraction",    # TaskDescriptor string or object
+            policy="balanced",    # fast | balanced | heavy | critical
+        )
+
+        if not result["ok"]:
+            # result["reason"]: budget_exceeded | pressure_skip |
+            #                   timeout | no_model | error
+            return
+
+        response = result["response"]
+
+        Policies:
+            fast     — skip if pressure > 0.7 (extraction, tagging)
+            balanced — skip if pressure > 0.85 (triage, chat, analysis)
+            heavy    — skip if pressure > 0.5 (dreams, synthesis, planning)
+            critical — almost always run, degrades at > 0.95 (operator input)
+    """
 
     def register_tables(self, db_conn):
-        """Create plugin-specific tables. Called once on startup.
-
-        Example:
-            db_conn.executescript('''
-                CREATE TABLE IF NOT EXISTS my_tasks (
-                    id TEXT PRIMARY KEY,
-                    description TEXT,
-                    status TEXT DEFAULT 'pending',
-                    created_at TEXT
-                );
-            ''')
-        """
+        """Create plugin-specific tables. Called once on engine init."""
         pass
 
     def register_endpoints(self, app, get_engine):
-        """Mount FastAPI routes for your plugin's API and dashboard.
-
-        Example:
-            from fastapi import APIRouter
-            router = APIRouter(prefix="/my-plugin", tags=["my-plugin"])
-
-            @router.get("/status")
-            async def status():
-                engine = get_engine()
-                return {"beliefs": engine.semantic.get_belief_count()}
-
-            app.include_router(router)
-        """
+        """Register FastAPI routes for this plugin."""
         pass
 
-    def get_prompts(self):
-        """Override extraction prompts for your domain.
-
-        Returns dict with optional keys:
-            extraction_prompt: str — how to extract beliefs from documents
-            system_prompt: str — system role for conversations
-            batch_prompt: str — batch extraction template
-
-        Templates can use: {filename}, {file_type}, {content}, {max_beliefs}
-        Return {} to use core defaults.
-        """
-        return {}
-
     def get_orchestrator_class(self):
-        """Return a custom orchestrator class for your plugin's lifecycle.
-
-        The orchestrator drives your plugin's work loop (scan, ingest, dream, etc.).
+        """Return orchestrator class, or None for no orchestrator.
         If your plugin needs document ingestion, copy the ingestion/
-        directory into your own plugin folder and import from there.
-        Never import from another plugin.
-        Return None for no orchestrator.
+        directory from an existing plugin into your own plugin folder
+        and import from there. Never import from another plugin.
         """
         return None
 
     def on_start(self, engine):
-        """Engine is fully ready. Start any background work here.
+        logger.info("my-plugin started")
 
-        engine.semantic — belief store (add_belief, search_beliefs, etc.)
-        engine.router — model inference (generate_with_messages)
-        engine.config — your plugin's config dict
+    def on_stop(self, engine):
+        logger.info("my-plugin stopped")
+
+    def tick(self, engine):
+        """One unit of plugin work per blade cycle.
+
+        Must be non-blocking. Do one step and return.
+
+        Example:
+            result = engine.inference.request(
+                [{"role": "user", "content": "Extract entities from: ..."}],
+                task="extraction",
+                policy="fast",
+            )
+            if not result["ok"]:
+                return  # system busy or budget hit — try next cycle
+
+            entities = parse(result["response"])
         """
         pass
 
-    def on_stop(self, engine):
-        """Engine shutting down. Clean up gracefully."""
+    def start_orchestrator(self, engine):
+        """Start continuous work loop (called from plugin dashboard)."""
         pass
 
-    def on_belief_added(self, engine, belief_id, belief_data):
-        """Called after a new belief is added. React to new knowledge."""
+    def stop_orchestrator(self, engine):
+        """Stop continuous work loop."""
         pass
 
-    def on_dream_complete(self, engine, dream_results):
-        """Called after dream synthesis. React to new connections."""
-        pass
+    def orchestrator_status(self) -> dict:
+        return {"running": False, "cycle": 0, "phase": "idle"}
