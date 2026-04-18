@@ -1,20 +1,3 @@
-# Copyright (C) 2026 Gerald Teeple
-#
-# This file is part of ANIMA.
-#
-# ANIMA is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# ANIMA is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with ANIMA. If not, see <https://www.gnu.org/licenses/>.
-
 """Rule-based query classifier for retrieval weight profile selection.
 
 Classifies incoming queries into: factual, reasoning, emotional, meta.
@@ -83,11 +66,23 @@ def classify_query(text):
 
 
 def get_weight_profile(category, config):
-    """Get retrieval weights for a query category from config."""
-    weights = config.get("retrieval", {}).get("weights", {}).get(category)
+    """Get retrieval weights for a query category from config.
+
+    Falls back to category='factual' → hardcoded defaults if the config
+    block is missing. Plugins that forget [retrieval.weights.*] won't
+    crash retrieval; they get the default profile.
+    """
+    retrieval = config.get("retrieval", {}) or {}
+    weights_cfg = retrieval.get("weights", {}) or {}
+    weights = weights_cfg.get(category) or weights_cfg.get("factual")
     if weights is None:
-        # Fallback to factual
-        weights = config["retrieval"]["weights"]["factual"]
+        # Absolute fallback — keeps retrieval alive even with empty config.
+        weights = {
+            "semantic_similarity": 0.5,
+            "entity_rescue": 0.25,
+            "reasoning_chain": 0.1,
+            "recency": 0.15,
+        }
     return weights
 
 

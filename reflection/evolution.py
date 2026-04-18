@@ -1,21 +1,3 @@
-# Copyright (C) 2026 Gerald Teeple
-#
-# This file is part of ANIMA.
-#
-# ANIMA is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# ANIMA is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with ANIMA. If not, see <https://www.gnu.org/licenses/>.
-
-
 """Evolution engine — sleep consolidation, belief management, and self-assessment.
 
 Three trigger points:
@@ -139,44 +121,61 @@ If nothing notable, respond with exactly: NONE
 Conversation:
 {conversation}"""
 
-DREAMS_PROMPT = """Two beliefs formed in separate conversations:
+DREAMS_PROMPT = """Two observations from different sources:
 BELIEF A: {belief_a}
 BELIEF B: {belief_b}
 
-What connects these? What novel inference emerges from combining them?
+Identify a specific mechanism connecting these two observations. The mechanism can be causal, structural, computational, or architectural — whatever concrete pathway the domain supports.
 
-The inference must be genuinely novel — something neither belief states alone and that
-is not obvious from reading them. Generic observations like "these are related" or
-"past experience informs future behavior" are NOT novel. Respond NONE for those.
+Rules:
+- The mechanism must be concrete — state HOW A and B interact, not THAT they are related
+- Use domain-appropriate language (causal chain, feedback loop, structural dependency, constraint, emergent property, computational coupling)
+- Do NOT describe the beliefs themselves or comment on their relationship
+- Do NOT write philosophical, editorial, or meta-commentary
+- If no concrete mechanism connects them, respond NONE
 
 Format:
-CONNECTION: <what links these beliefs>
-INFERENCE: <a new insight that neither belief states alone>
+CONNECTION: <the specific pathway linking A and B>
+INFERENCE: <a specific mechanistic claim combining both — one sentence>
 
-Example:
-BELIEF A: The system uses iterative validation before accepting changes
-BELIEF B: All modifications require explicit approval before integration
+Example 1 (biology):
+BELIEF A: Chronic inflammation promotes DNA damage in colon tissue
+BELIEF B: COX-2 inhibitors reduce colorectal cancer incidence
+CONNECTION: COX-2 mediates inflammatory prostaglandin synthesis in epithelial tissue
+INFERENCE: COX-2 inhibitors reduce colorectal cancer by blocking prostaglandin-driven DNA damage in chronically inflamed tissue
 
-CONNECTION: Both reflect a deliberate, incremental approach to building reliable systems
-INFERENCE: The approval mechanism itself embodies iterative refinement — each validated change building toward the whole
+Example 2 (AI / cognitive systems):
+BELIEF A: Persistent memory systems consolidate beliefs through offline dream synthesis
+BELIEF B: Curriculum learning exposes models to scaffolded failure cases during training
+CONNECTION: Offline consolidation phases preferentially reinforce belief structures that survived recent failure exposure
+INFERENCE: Combining curriculum learning with offline consolidation produces more stable belief representations than either alone, because failure-adjacent beliefs become selectively strengthened during the consolidation replay phase
 
-If these beliefs are unrelated, the connection is trivial, or the inference is obvious, respond with: NONE"""
+Example 3 (software architecture):
+BELIEF A: Plugin isolation prevents cross-plugin data leaks at the database boundary
+BELIEF B: Each plugin owns its own ingestion pipeline with no shared code
+CONNECTION: Per-plugin ingestion writes only to the plugin's own DB handle, which the isolation boundary enforces
+INFERENCE: Per-plugin ingestion ownership is structurally required for DB-level isolation, because any shared ingestion code would need a shared handle that breaks the isolation boundary
 
-TRIPLET_DREAMS_PROMPT = """Three connected beliefs from separate conversations:
+If no concrete mechanism connects these, respond with: NONE"""
+
+TRIPLET_DREAMS_PROMPT = """Three observations from different sources:
 BELIEF A: {belief_a}
 BELIEF B: {belief_b}
 BELIEF C: {belief_c}
 
-What pattern or principle emerges from combining all three that none expresses alone?
+Identify a specific causal mechanism that requires all three observations to derive.
 
-The synthesis must require all three beliefs — if removing any one belief leaves the insight intact,
-it is not a genuine triplet synthesis. Generic observations are NOT novel. Respond NONE for those.
+Rules:
+- The mechanism must involve all three — if removing any one leaves the insight intact, respond NONE
+- State a concrete cause-and-effect chain, not a commentary or pattern description
+- Do NOT write philosophical, editorial, or meta-commentary
+- One sentence for the inference
 
 Format:
-CONNECTION: <what links all three beliefs>
-INFERENCE: <a new principle that requires all three beliefs to derive>
+CONNECTION: <the shared causal pathway linking all three>
+INFERENCE: <a specific mechanistic claim requiring all three — one sentence>
 
-If these beliefs lack a three-way connection, or the inference only needs two of them, respond with: NONE"""
+If no three-way causal mechanism exists, respond with: NONE"""
 
 REFLECTION_PROMPT = """Review these summaries from recent conversations and identify recurring patterns.
 
@@ -1376,7 +1375,7 @@ class EvolutionEngine:
             ]
 
             response = self.inference.generate_with_messages(
-                messages, max_tokens=200, temperature=0.1, task="reinforcement",
+                messages, temperature=0.1, task="reinforcement",
             )
             response = response.strip()
 
@@ -1499,7 +1498,7 @@ class EvolutionEngine:
                 },
             ]
             response = self.inference.generate_with_messages(
-                messages, max_tokens=self.analysis_max_tokens, temperature=0.1, timeout=240, task="reinforcement",
+                messages, temperature=0.1, timeout=240, task="reinforcement",
             )
             if not response:
                 logger.warning("Pass 1 (summary): no response from model")
@@ -1535,7 +1534,7 @@ class EvolutionEngine:
                 },
             ]
             response = self.inference.generate_with_messages(
-                messages, max_tokens=self.analysis_max_tokens, temperature=0.1, timeout=240, task="reinforcement",
+                messages, temperature=0.1, timeout=240, task="reinforcement",
             )
             if not response:
                 logger.warning("Pass 2 (beliefs): no response from model")
@@ -1569,7 +1568,7 @@ class EvolutionEngine:
                 },
             ]
             response = self.inference.generate_with_messages(
-                messages, max_tokens=self.analysis_max_tokens, temperature=0.1, timeout=240, task="reinforcement",
+                messages, temperature=0.1, timeout=240, task="reinforcement",
             )
             if not response:
                 logger.warning("Pass 3 (corrections): no response from model")
@@ -1602,7 +1601,7 @@ class EvolutionEngine:
                 },
             ]
             response = self.inference.generate_with_messages(
-                messages, max_tokens=self.analysis_max_tokens, temperature=0.1, timeout=240, task="reinforcement",
+                messages, temperature=0.1, timeout=240, task="reinforcement",
             )
             if not response:
                 logger.warning("Pass 4 (questions): no response from model")
@@ -2361,7 +2360,7 @@ class EvolutionEngine:
                     {"role": "system", "content": "You translate scientific text to English. Output only the translation."},
                     {"role": "user", "content": prompt},
                 ],
-                max_tokens=200, timeout=90, task="triage",
+                timeout=90, task="triage",
             )
             if not result:
                 return None
@@ -2408,12 +2407,16 @@ class EvolutionEngine:
                 {"role": "system", "content": "You classify scientific statements. A MECHANISM states ONE specific causal relationship. A NARRATIVE discusses or frames mechanisms without stating one. Reply with one word."},
                 {"role": "user", "content": prompt},
             ],
-            max_tokens=10, timeout=90, task="triage",
+            timeout=90, task="decision",
         )
         if not result:
             return "UNCLEAR", "no model response"
         result = _re.sub(r"<think>.*?</think>", "", result, flags=_re.DOTALL).strip()
-        classification = result.strip().upper().split()[0] if result else "UNCLEAR"
+        # Extract first alphabetic token — models routinely append a period
+        # ("MECHANISM.") which broke keyword match against the Rust whitelist
+        # and silently quarantined ~44% of dreams to the approval queue.
+        m = _re.search(r"[A-Z_]+", result.upper()) if result else None
+        classification = m.group(0) if m else "UNCLEAR"
         return classification, f"classified as {classification.lower()}"
 
     def _llm_rewrite_dream(self, inference, classification, reason):
@@ -2439,7 +2442,7 @@ class EvolutionEngine:
                 {"role": "system", "content": "You extract core mechanistic claims from scientific text. One sentence, under 30 words. If no mechanism exists, reply NO_MECHANISM."},
                 {"role": "user", "content": prompt},
             ],
-            max_tokens=60, timeout=90, task="triage",
+            timeout=90, task="triage",
         )
         if not result:
             return None
@@ -3447,7 +3450,7 @@ class EvolutionEngine:
             ]
 
             response = self.inference.generate_with_messages(
-                messages, max_tokens=self.analysis_max_tokens, temperature=0.1, task="reinforcement",
+                messages, temperature=0.1, task="reinforcement",
             )
 
             if response.strip().upper() == "NONE":
@@ -4207,8 +4210,9 @@ class EvolutionEngine:
                     {
                         "role": "system",
                         "content": (
-                            "You are a creative thinker finding connections "
-                            "between ideas. Be specific and insightful."
+                            "You are a scientific reasoning engine. Identify causal "
+                            "mechanisms connecting observations. Be concrete and mechanistic. "
+                            "Never write commentary, philosophy, or meta-analysis."
                         ),
                     },
                     {
@@ -4221,7 +4225,7 @@ class EvolutionEngine:
                 ]
 
                 response = self.inference.generate_with_messages(
-                    messages, max_tokens=self.analysis_max_tokens, temperature=0.1, task="dreams",
+                    messages, temperature=0.1, task="dreams",
                 )
                 if not response:
                     logger.warning("Dream synthesis: no response from model")
@@ -4239,6 +4243,11 @@ class EvolutionEngine:
                         f"Dream connection: '{belief_a['statement'][:40]}' <-> "
                         f"'{belief_b['statement'][:40]}' "
                         f"(sim={sim:.2f}, {dom_a} ↔ {dom_b})"
+                    )
+                else:
+                    # Cooldown failed pairs so they don't get retried every pass
+                    core.dream_add_pair_cooldown(
+                        belief_a["id"], belief_b["id"], self.dream_pair_cooldown
                     )
 
             if not dream_results:
@@ -4877,8 +4886,9 @@ class EvolutionEngine:
             {
                 "role": "system",
                 "content": (
-                    "You are a creative thinker synthesizing patterns across "
-                    "multiple ideas. Be specific and insightful."
+                    "You are a scientific reasoning engine. Identify causal "
+                    "mechanisms connecting observations. Be concrete and mechanistic. "
+                    "Never write commentary, philosophy, or meta-analysis."
                 ),
             },
             {
@@ -4892,7 +4902,7 @@ class EvolutionEngine:
         ]
 
         response = self.inference.generate_with_messages(
-            messages, max_tokens=self.analysis_max_tokens, temperature=0.1, task="triplet",
+            messages, temperature=0.1, task="triplet",
         )
         if not response:
             logger.warning("Triplet synthesis: no response from model")

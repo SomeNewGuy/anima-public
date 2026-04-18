@@ -192,6 +192,8 @@ class DocumentExtractor:
         if len(content) > self.context_budget_chars:
             content = content[:self.context_budget_chars]
 
+        max_beliefs = self._estimate_max_beliefs(content)
+
         prompt_text = DOCUMENT_EXTRACTION_PROMPT.format(
             content=content,
             filename=filename,

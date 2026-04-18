@@ -1,21 +1,3 @@
-# Copyright (C) 2026 Gerald Teeple
-#
-# This file is part of ANIMA.
-#
-# ANIMA is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# ANIMA is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with ANIMA. If not, see <https://www.gnu.org/licenses/>.
-
-
 """Multi-model routing — distributes inference tasks across available LLM endpoints.
 
 Routes by capability vectors: models have measured scores (reasoning, speed,
@@ -206,6 +188,7 @@ class ModelInfo:
         self.last_check = None
         self.last_latency_ms = 0
         self.error_count = 0
+        self.consecutive_timeouts = 0  # reset on any success; N in a row = frozen
         self.tokens_per_second = tokens_per_sec  # calibrated generation speed
         self.recent_success_rate = 1.0  # rolling average
 
@@ -794,10 +777,17 @@ class ModelRouter:
                 self._sync_model_online(name, False)
                 logger.warning(f"Model '{name}' offline: {e}")
 
-        # Check online models
+        # Check online models — log, don't block startup.
+        # Operators must be able to boot the platform before models are reachable
+        # (enable a disabled model from the dashboard, wait for a local server to
+        # finish loading, swap endpoints). Router wakes up empty and picks up
+        # models as they come online via health-check polling or dashboard actions.
         online = [n for n, m in self.models.items() if m.online]
         if not online and self.models:
-            raise ConnectionError("No inference models available")
+            logger.warning(
+                f"Router starting with 0/{len(self.models)} models online. "
+                f"Dispatches will fail until a model recovers or is re-enabled."
+            )
         elif not self.models:
             logger.warning("No models configured — add via dashboard Settings")
 
@@ -1338,7 +1328,16 @@ class ModelRouter:
     def generate(self, prompt, system_context="", max_tokens=None, task=None):
         from core.task_presets import resolve_task
         descriptor = resolve_task(task)
-        estimated = (len(prompt) + len(system_context)) // 3 + (max_tokens or 1024)
+        # Preset default; explicit override is a code-smell and logged below
+        if max_tokens is None:
+            max_tokens = descriptor.max_output_tokens
+        else:
+            logger.debug(
+                f"max_tokens literal override: {max_tokens} (task={task}, "
+                f"preset default={descriptor.max_output_tokens}). "
+                f"Call site should omit max_tokens and use task= only."
+            )
+        estimated = (len(prompt) + len(system_context)) // 3 + max_tokens
         engine, model_name, rid = self._acquire_engine(descriptor, estimated, 180)
         _start = time.time()
         try:
@@ -1354,6 +1353,8 @@ class ModelRouter:
     def generate_streaming(self, prompt, system_context="", max_tokens=None, task=None):
         from core.task_presets import resolve_task
         descriptor = resolve_task(task)
+        if max_tokens is None:
+            max_tokens = descriptor.max_output_tokens
         engine, model_name, rid = self._acquire_engine(descriptor, 0, 180)
         try:
             yield from engine.generate_streaming(prompt, system_context, max_tokens)
@@ -1366,20 +1367,62 @@ class ModelRouter:
 
         Rust scheduler owns capacity. Python acquires, dispatches, records result.
         Reservation ID guarantees release even on crash (Rust sweep recovers).
+
+        max_tokens: if None, uses descriptor.max_output_tokens (the preset default).
+        Explicit literals are logged at DEBUG — call sites should pass task= only.
         """
         from core.task_presets import resolve_task
         descriptor = resolve_task(task_desc or task)
 
-        # Scale timeout for heavy tasks
-        if getattr(descriptor, 'typical_tokens', 0) > 2000 and timeout <= 180:
-            timeout = 600
+        # Preset default; explicit override is a code-smell and logged
+        if max_tokens is None:
+            max_tokens = descriptor.max_output_tokens
+        else:
+            logger.debug(
+                f"max_tokens literal override: {max_tokens} (task={task}, "
+                f"preset default={descriptor.max_output_tokens}). "
+                f"Call site should omit max_tokens and use task= only."
+            )
 
-        estimated = self._estimate_tokens(messages, max_tokens)
+        # Auto-scale timeout based on max_tokens. Caller-passed timeout is a
+        # floor — router enforces minimum based on realistic throughput.
+        # MIN_TOKENS_PER_SEC=5 is conservative: covers slow reasoning models
+        # (MiniMax ~10 tok/s) with 2x safety margin. +60s buffer for prompt
+        # processing, network latency, model acquire wait.
+        MIN_TOKENS_PER_SEC = 5
+        min_required_timeout = (max_tokens // MIN_TOKENS_PER_SEC) + 60
+        if timeout < min_required_timeout:
+            logger.debug(
+                f"Timeout auto-scaled: {timeout}s → {min_required_timeout}s "
+                f"(max_tokens={max_tokens}, floor={MIN_TOKENS_PER_SEC} tok/s). "
+                f"Task={task}. Caller-passed timeout was too short for budget."
+            )
+            timeout = min_required_timeout
+
+        estimated_input = self._estimate_tokens(messages, 0)
+        estimated = estimated_input + max_tokens
         task_label = getattr(descriptor, 'label', None) or task or descriptor.task_class
 
         # Acquire — blocks until Rust grants a slot
         engine, model_name, rid = self._acquire_engine(descriptor, estimated, timeout)
         _dispatch_start = time.time()
+
+        # Context budget check — input + output must fit in 90% of the
+        # SELECTED MODEL's actual context window. Previous implementation
+        # checked against descriptor.min_context (a routing floor), which
+        # rejected valid requests that fit in the model but exceeded the
+        # floor. Now checked post-selection against real capacity.
+        model_info = self.models.get(model_name)
+        ctx_budget = model_info.context_window if model_info else 32768
+        if estimated_input + max_tokens > ctx_budget * 0.9:
+            self._record_result(rid, False, 0)
+            rid = 0
+            raise RuntimeError(
+                f"Context budget exceeded: input={estimated_input} + "
+                f"max_output={max_tokens} > 90% of context={ctx_budget} "
+                f"(model={model_name}, task={task}). Reduce input or use "
+                f"a model with larger context window."
+            )
 
         # Configure thinking if needed
         self._configure_thinking(engine, descriptor)
@@ -1397,6 +1440,7 @@ class ModelRouter:
             if model_name and self.models.get(model_name):
                 m = self.models[model_name]
                 m.error_count = 0
+                m.consecutive_timeouts = 0
                 m.recent_success_rate = m.recent_success_rate * 0.95 + 0.05
             return result
 
@@ -1421,6 +1465,10 @@ class ModelRouter:
                 fb_start = time.time()
                 result = fb_engine.generate_with_messages(messages, max_tokens, temperature, timeout)
                 self._record_result(fb_rid, True, (time.time() - fb_start) * 1000)
+                if fb_name and self.models.get(fb_name):
+                    fb_m = self.models[fb_name]
+                    fb_m.error_count = 0
+                    fb_m.consecutive_timeouts = 0
                 fb_rid = 0
                 return result
             except RuntimeError:
@@ -1531,9 +1579,20 @@ class ModelRouter:
         if "rate limit" in error_str:
             logger.info(f"Model '{name}' rate limited — will retry")
             return
-        # Timeout — expected for slow models on big tasks. Log, don't count.
+        # Timeout — single timeouts are fine (slow models on big tasks).
+        # But N-in-a-row means the box is frozen, not slow. Reset on any success.
         if "timeout" in error_str or "timed out" in error_str:
-            logger.info(f"Model '{name}' timed out — not an error for slow models")
+            info.consecutive_timeouts += 1
+            if info.consecutive_timeouts >= 3:
+                info.online = False
+                self._sync_model_online(name, False)
+                logger.warning(
+                    f"Model '{name}' offline after {info.consecutive_timeouts} consecutive timeouts — likely frozen"
+                )
+            else:
+                logger.info(
+                    f"Model '{name}' timed out ({info.consecutive_timeouts}/3 consecutive)"
+                )
             return
         # Immediate disable ONLY on auth/billing errors
         if any(s in error_str for s in ("insufficient balance", "invalid api key", "not set", "unauthorized", "authentication")):
@@ -1679,7 +1738,12 @@ class ModelRouter:
     def set_enabled(self, key, enabled):
         """Enable/disable a model without removing its config."""
         if key in self.models:
-            self.models[key].enabled = enabled
+            info = self.models[key]
+            info.enabled = enabled
+            # Rust scheduler only tracks online — hide disabled models by
+            # flipping their Rust-side online state. Actual online is preserved
+            # in Python and restored when the model is re-enabled.
+            self._sync_model_online(key, enabled and info.online)
             logger.info(f"Model '{key}' {'enabled' if enabled else 'disabled'}")
             return True
         return False
@@ -1692,21 +1756,33 @@ class ModelRouter:
 
         if "endpoint" in updates:
             info.endpoint = updates["endpoint"]
-            # Recreate engine with new endpoint and reconnect
-            from core.inference import InferenceEngine
-            engine_config = dict(self.config)
-            engine_config["hardware"] = dict(self.config.get("hardware", {}))
-            engine_config["hardware"]["inference_mode"] = "server"
-            engine_config["hardware"]["inference_server"] = info.endpoint
-            engine_config["hardware"]["thinking_prefix"] = info.thinking_prefix
-            self._engines[key] = InferenceEngine(engine_config)
-            try:
-                self._engines[key].load()
+            if info.backend == "anthropic":
+                # API backend — endpoint is informational, adapter hardcodes the URL.
+                # Never probe API models; assumed online until a billing/auth call fails.
+                if not isinstance(self._engines.get(key), AnthropicAdapter):
+                    self._engines[key] = AnthropicAdapter(
+                        model_id=info.claude_model or "claude-sonnet-4-20250514",
+                        api_key_env=info.api_key_env or "ANTHROPIC_API_KEY",
+                    )
                 info.online = True
-                logger.info(f"Model '{key}' reconnected at {info.endpoint}")
-            except Exception as e:
-                info.online = False
-                logger.warning(f"Model '{key}' failed to connect at {info.endpoint}: {e}")
+                self._sync_model_online(key, True)
+                logger.info(f"Model '{key}' endpoint updated to {info.endpoint} (anthropic, no probe)")
+            else:
+                # Recreate engine with new endpoint and reconnect
+                from core.inference import InferenceEngine
+                engine_config = dict(self.config)
+                engine_config["hardware"] = dict(self.config.get("hardware", {}))
+                engine_config["hardware"]["inference_mode"] = "server"
+                engine_config["hardware"]["inference_server"] = info.endpoint
+                engine_config["hardware"]["thinking_prefix"] = info.thinking_prefix
+                self._engines[key] = InferenceEngine(engine_config)
+                try:
+                    self._engines[key].load()
+                    info.online = True
+                    logger.info(f"Model '{key}' reconnected at {info.endpoint}")
+                except Exception as e:
+                    info.online = False
+                    logger.warning(f"Model '{key}' failed to connect at {info.endpoint}: {e}")
 
         if "tier" in updates:
             info.tier = updates["tier"]
@@ -1716,6 +1792,7 @@ class ModelRouter:
             info.thinking_prefix = updates["thinking_prefix"]
         if "enabled" in updates:
             info.enabled = updates["enabled"]
+            self._sync_model_online(key, info.enabled and info.online)
         if "parallel" in updates:
             info.parallel = updates["parallel"]
         if "name" in updates:
