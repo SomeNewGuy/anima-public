@@ -1907,7 +1907,7 @@ class EvolutionEngine:
                         corpus_embs.append((b_emb, b["statement"]))
                     except Exception:
                         continue
-                is_dup, _ = is_duplicate(cand_emb, corpus_embs, threshold=0.92)
+                is_dup, _ = is_duplicate(cand_emb, corpus_embs, threshold=0.88)
                 if is_dup:
                     return False
         except Exception:
@@ -4257,7 +4257,10 @@ class EvolutionEngine:
             # Dedup: remove near-duplicate inferences within the batch
             # AND against existing beliefs in the graph.
             # Prevents the same bridge from being stated 3 different ways.
-            dedup_threshold = self.config.get("dreams", {}).get("dedup_threshold", 0.92)
+            # Default 0.88 catches paraphrase duplicates (same claim, different
+            # wording) that were slipping past the previous 0.92. Six paraphrase
+            # clusters landed in the rejected queue before the lower threshold.
+            dedup_threshold = self.config.get("dreams", {}).get("dedup_threshold", 0.88)
             deduped_results = []
             dedup_skipped = 0
             kept_embeddings = []
@@ -4412,7 +4415,11 @@ class EvolutionEngine:
                             f"Dream: \"{d['belief_a']['statement'][:40]}\" + "
                             f"\"{d['belief_b']['statement'][:40]}\" = {d['inference'][:50]}"
                         )
-                        dream_rec = d.get("similarity", 0.5) >= 0.50
+                        # Recommend threshold matches dream_similarity_min — the whole
+                        # 0.40-0.49 band is where genuine cross-domain bridges live.
+                        # Recommending only sim≥0.50 biased toward same-domain near-
+                        # duplicates and auto-rejected the novel stuff.
+                        dream_rec = d.get("similarity", 0.5) >= self.dream_similarity_min
                         self.queue_item("dream", dream_data, dream_rec, label)
                         stats["queued"] += 1
                 logger.info(
